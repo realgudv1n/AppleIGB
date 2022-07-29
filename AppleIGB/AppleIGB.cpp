@@ -1429,36 +1429,8 @@ static void igb_irq_disable(struct igb_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
 	
-	/*
-	 * we need to be careful when disabling interrupts.  The VFs are also
-	 * mapped into these registers and so clearing the bits can cause
-	 * issues on the VF drivers so we only need to clear what we set
-	 */
-	if (adapter->msix_entries) {
-		u32 regval = E1000_READ_REG(hw, E1000_EIAM);
-		E1000_WRITE_REG(hw, E1000_EIAM, regval
-				& ~adapter->eims_enable_mask);
-		E1000_WRITE_REG(hw, E1000_EIMC, adapter->eims_enable_mask);
-		regval = E1000_READ_REG(hw, E1000_EIAC);
-		E1000_WRITE_REG(hw, E1000_EIAC, regval
-				& ~adapter->eims_enable_mask);
-	}
-	
-	E1000_WRITE_REG(hw, E1000_IAM, 0);
 	E1000_WRITE_REG(hw, E1000_IMC, ~0);
 	E1000_WRITE_FLUSH(hw);
-#ifndef __APPLE__
-	if (adapter->msix_entries) {
-		int vector = 0, i;
-		
-		synchronize_irq(adapter->msix_entries[vector++].vector);
-		
-		for (i = 0; i < adapter->num_q_vectors; i++)
-			synchronize_irq(adapter->msix_entries[vector++].vector);
-	} else {
-		synchronize_irq(adapter->pdev->irq);
-	}
-#endif
 }
 
 /**
@@ -1469,59 +1441,8 @@ static void igb_irq_enable(struct igb_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
 	
-	if (adapter->msix_entries) {
-		u32 ims = E1000_IMS_LSC | E1000_IMS_DOUTSYNC | E1000_IMS_DRSTA;
-		u32 regval = E1000_READ_REG(hw, E1000_EIAC);
-		E1000_WRITE_REG(hw, E1000_EIAC, regval | adapter->eims_enable_mask);
-		regval = E1000_READ_REG(hw, E1000_EIAM);
-		E1000_WRITE_REG(hw, E1000_EIAM, regval | adapter->eims_enable_mask);
-		E1000_WRITE_REG(hw, E1000_EIMS, adapter->eims_enable_mask);
-		if (adapter->vfs_allocated_count) {
-			E1000_WRITE_REG(hw, E1000_MBVFIMR, 0xFF);
-			ims |= E1000_IMS_VMMB;
-		/* For I350 device only enable MDD interrupts */
-			if ((adapter->mdd) &&
-			    (adapter->hw.mac.type == e1000_i350))
-				ims |= E1000_IMS_MDDET;
-		}
-		E1000_WRITE_REG(hw, E1000_IMS, ims);
-	} else {
-		E1000_WRITE_REG(hw, E1000_IMS, IMS_ENABLE_MASK |
-						E1000_IMS_DRSTA);
-		E1000_WRITE_REG(hw, E1000_IAM, IMS_ENABLE_MASK |
-						E1000_IMS_DRSTA);
-	}
-}
-
-static void igb_update_mng_vlan(struct igb_adapter *adapter)
-{
-	struct e1000_hw *hw = &adapter->hw;
-	u16 vid = adapter->hw.mng_cookie.vlan_id;
-#ifndef __APPLE__
-	u16 old_vid = adapter->mng_vlan_id;
-#endif
-
-	if (hw->mng_cookie.status & E1000_MNG_DHCP_COOKIE_STATUS_VLAN) {
-		/* add VID to filter table */
-		igb_vfta_set(adapter, vid, TRUE);
-		adapter->mng_vlan_id = vid;
-	} else {
-		adapter->mng_vlan_id = IGB_MNG_VLAN_NONE;
-	}
-	
-#ifdef __APPLE__
-#else
-	if ((old_vid != (u16)IGB_MNG_VLAN_NONE) &&
-	    (vid != old_vid) &&
-#ifdef HAVE_VLAN_RX_REGISTER
-	    !vlan_group_get_device(adapter->vlgrp, old_vid)) {
-#else
-	    !test_bit(old_vid, adapter->active_vlans)) {
-#endif
-		/* remove VID from filter table */
-		igb_vfta_set(adapter, old_vid, FALSE);
-	}
-#endif
+	E1000_WRITE_REG(hw, E1000_IMS, IMS_ENABLE_MASK | E1000_IMS_DRSTA);
+    E1000_WRITE_REG(hw, E1000_IAM, IMS_ENABLE_MASK | E1000_IMS_DRSTA);
 }
 	
 /**
@@ -2127,7 +2048,7 @@ void igb_reset(struct igb_adapter *adapter)
 	if (!netif_running(adapter->netdev))
 		igb_power_down_link(adapter);
 
-	igb_update_mng_vlan(adapter);
+	//igb_update_mng_vlan(adapter);
 
 	/* Enable h/w to recognize an 802.1Q VLAN Ethernet packet */
 	E1000_WRITE_REG(hw, E1000_VET, ETHERNET_IEEE_VLAN_TYPE);
